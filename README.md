@@ -1,5 +1,7 @@
 # BigQuery MCP server
 
+[![smithery badge](https://smithery.ai/badge/mcp-server-bigquery)](https://smithery.ai/server/mcp-server-bigquery)
+
 A Model Context Protocol server that provides access to BigQuery. This server enables LLMs to inspect database schemas and execute queries.
 
 ## Components
@@ -23,6 +25,14 @@ The server can be configured with the following arguments:
 ## Quickstart
 
 ### Install
+
+#### Installing via Smithery
+
+To install BigQuery Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/mcp-server-bigquery):
+
+```bash
+npx -y @smithery/cli install mcp-server-bigquery --client claude
+```
 
 #### Claude Desktop
 
