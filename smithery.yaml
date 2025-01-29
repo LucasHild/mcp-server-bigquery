@@ -1,0 +1,26 @@
+# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
+
+startCommand:
+  type: stdio
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    required:
+      - project
+      - location
+    properties:
+      project:
+        type: string
+        description: The GCP project ID.
+      location:
+        type: string
+        description: The GCP location (e.g., europe-west9).
+      dataset:
+        type: array
+        items:
+          type: string
+        description: Specific BigQuery datasets to consider.
+  commandFunction:
+    # A function that produces the CLI command to start the MCP on stdio.
+    |-
+    (config) => ({ command: 'mcp-server-bigquery', args: ['--project', config.project, '--location', config.location, ...config.dataset.map(d => ['--dataset', d]).flat()] })
