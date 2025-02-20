@@ -63,7 +63,7 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
       "{{GCP_LOCATION}}"
     ]
   }
-}
+}   
 ```
 
 Replace `{{PATH_TO_REPO}}`, `{{GCP_PROJECT_ID}}`, and `{{GCP_LOCATION}}` with the appropriate values.
