@@ -6,6 +6,12 @@ import mcp.types as types
 from mcp.server import NotificationOptions, Server
 import mcp.server.stdio
 from typing import Any, Optional
+import google.auth
+from google.auth.credentials import Credentials as GoogleAuthCredentials
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Set up logging to both stdout and file
 logger = logging.getLogger('mcp_bigquery_server')
@@ -35,17 +41,46 @@ class BigQueryDatabase:
         if not location:
             raise ValueError("Location is required")
         
-        credentials: service_account.Credentials | None = None
+        credentials: Optional[GoogleAuthCredentials] = None
+        scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+
         if key_file:
             try:
-                credentials_path = key_file
-                credentials = service_account.Credentials.from_service_account_file(
-                    credentials_path,
-                    scopes=["https://www.googleapis.com/auth/cloud-platform"],
+                logger.info(f"Attempting to load credentials from key_file: {key_file}")
+                # google.auth.load_credentials_from_file can handle various credential types
+                # including service account keys and authorized user keys (like ADC files).
+                creds_obj, _ = google.auth.load_credentials_from_file(
+                    key_file,
+                    scopes=scopes,
                 )
+                credentials = creds_obj
+                logger.info(f"Successfully loaded credentials from key_file: {key_file}")
             except Exception as e:
-                logger.error(f"Error loading service account credentials: {e}")
-                raise ValueError(f"Invalid key file: {e}")
+                logger.error(f"Error loading credentials from key_file '{key_file}': {e}")
+                # Include the original exception type and message for better debugging
+                raise ValueError(f"Invalid key file '{key_file}'. Failed to load credentials: {type(e).__name__} - {e}")
+        else:
+            # No key_file provided.
+            # The BigQuery client will attempt to use Application Default Credentials automatically.
+            # We try to load them explicitly here to provide earlier feedback or set a quota project.
+            logger.info("No key_file provided. Attempting to load Application Default Credentials.")
+            try:
+                creds_obj, detected_project_id = google.auth.default(
+                    scopes=scopes,
+                    quota_project_id=project # Good practice to set quota_project_id from the provided project
+                )
+                credentials = creds_obj
+                logger.info(f"Successfully loaded Application Default Credentials. Effective project for quota: {detected_project_id or project}")
+            except google.auth.exceptions.DefaultCredentialsError as e:
+                logger.warning(
+                    f"Could not automatically find Application Default Credentials: {e}. "
+                    "The BigQuery client will still attempt to find them. "
+                    "Ensure GOOGLE_APPLICATION_CREDENTIALS is set or you are in a GCP-configured environment."
+                )
+                # credentials remains None, BigQuery client will try its own ADC lookup.
+            except Exception as e: # Catch any other unexpected errors during google.auth.default()
+                logger.error(f"An unexpected error occurred while trying to load Application Default Credentials: {e}")
+                # credentials remains None, BigQuery client will try its own ADC lookup.
 
         self.client = bigquery.Client(credentials=credentials, project=project, location=location)
         self.datasets_filter = datasets_filter

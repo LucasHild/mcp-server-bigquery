@@ -7,6 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
  "google-cloud-bigquery>=3.27.0",
  "mcp>=1.0.0",
+ "python-dotenv>=1.0.1",
 ]
 [[project.authors]]
 name = "Lucas Hild"
