@@ -18,10 +18,58 @@ The server implements one tool:
 
 The server can be configured with the following arguments:
 
-- `--project` (required): The GCP project ID.
-- `--location` (required): The GCP location (e.g. `europe-west9`).
+- `--project` (optional): The GCP project ID. Can also be set via `GOOGLE_CLOUD_PROJECT` environment variable.
+- `--location` (optional): The GCP location (e.g. `europe-west9`). Can also be set via `GOOGLE_CLOUD_LOCATION` environment variable (default: `US`).
 - `--dataset` (optional): Only take specific BigQuery datasets into consideration. Several datasets can be specified by repeating the argument (e.g. `--dataset my_dataset_1 --dataset my_dataset_2`). If not provided, all datasets in the project will be considered.
-- `--key-file` (optional): Path to a service account key file for BigQuery. If not provided, the server will use the default credentials.
+- `--key-file` (optional): Path to a service account key file for BigQuery. Can also be set via `GOOGLE_APPLICATION_CREDENTIALS` environment variable. If not provided, the server will use Application Default Credentials.
+
+## Authentication
+
+The server supports multiple authentication methods:
+
+### 1. Application Default Credentials (Recommended for Local Development)
+
+This is the most secure and convenient method for local development:
+
+```bash
+# Install gcloud CLI (if not already installed)
+# https://cloud.google.com/sdk/docs/install
+
+# Authenticate with your Google account
+gcloud auth application-default login
+
+# Set your default project (optional)
+gcloud config set project YOUR_PROJECT_ID
+```
+
+### 2. Environment Variables
+
+Set the required environment variables:
+
+```bash
+export GOOGLE_CLOUD_PROJECT="your-project-id"
+export GOOGLE_CLOUD_LOCATION="US"  # Optional, defaults to US
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account-key.json"  # Optional
+```
+
+### 3. Service Account Key File
+
+For automated or CI/CD environments:
+
+1. Create a service account in the Google Cloud Console
+2. Grant the following IAM roles:
+   - `BigQuery Data Viewer`
+   - `BigQuery Job User`
+3. Download the JSON key file
+4. Use `--key-file` parameter or set `GOOGLE_APPLICATION_CREDENTIALS` environment variable
+
+### Authentication Priority
+
+The server uses the following priority order for authentication:
+
+1. `--key-file` parameter or `GOOGLE_APPLICATION_CREDENTIALS` environment variable
+2. Application Default Credentials (via `gcloud auth application-default login`)
+3. Compute Engine/Cloud Run automatic authentication (if running on GCP)
 
 ## Quickstart
 
@@ -40,7 +88,9 @@ npx -y @smithery/cli install mcp-server-bigquery --client claude
 On MacOS: `~/Library/Application\ Support/Claude/claude_desktop_config.json`
 On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 
-##### Development/Unpublished Servers Configuration</summary>
+##### Development/Unpublished Servers Configuration
+
+**Using Application Default Credentials (Recommended):**
 
 ```json
 "mcpServers": {
@@ -60,7 +110,29 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 }
 ```
 
+**Using Environment Variables:**
+
+```json
+"mcpServers": {
+  "bigquery": {
+    "command": "uv",
+    "args": [
+      "--directory",
+      "{{PATH_TO_REPO}}",
+      "run",
+      "mcp-server-bigquery"
+    ],
+    "env": {
+      "GOOGLE_CLOUD_PROJECT": "{{GCP_PROJECT_ID}}",
+      "GOOGLE_CLOUD_LOCATION": "{{GCP_LOCATION}}"
+    }
+  }
+}
+```
+
 ##### Published Servers Configuration
+
+**Using Application Default Credentials (Recommended):**
 
 ```json
 "mcpServers": {
@@ -77,7 +149,30 @@ On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
 }
 ```
 
+**Using Environment Variables:**
+
+```json
+"mcpServers": {
+  "bigquery": {
+    "command": "uvx",
+    "args": [
+      "mcp-server-bigquery"
+    ],
+    "env": {
+      "GOOGLE_CLOUD_PROJECT": "{{GCP_PROJECT_ID}}",
+      "GOOGLE_CLOUD_LOCATION": "{{GCP_LOCATION}}"
+    }
+  }
+}
+```
+
 Replace `{{PATH_TO_REPO}}`, `{{GCP_PROJECT_ID}}`, and `{{GCP_LOCATION}}` with the appropriate values.
+
+**Setup Instructions:**
+
+1. **For Application Default Credentials:** Run `gcloud auth application-default login` before starting Claude Desktop
+2. **For Environment Variables:** Set the environment variables in your shell or MCP configuration
+3. **For Service Account Keys:** Set `GOOGLE_APPLICATION_CREDENTIALS` environment variable to point to your key file
 
 ## Development
 

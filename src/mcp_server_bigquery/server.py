@@ -9,6 +9,7 @@ from typing import Any, Optional
 import google.auth
 from google.auth.credentials import Credentials as GoogleAuthCredentials
 from dotenv import load_dotenv
+import os
 
 # Load environment variables
 load_dotenv()
@@ -35,11 +36,23 @@ logger.info("Starting MCP BigQuery Server")
 class BigQueryDatabase:
     def __init__(self, project: str, location: str, key_file: Optional[str], datasets_filter: list[str]):
         """Initialize a BigQuery database client"""
-        logger.info(f"Initializing BigQuery client for project: {project}, location: {location}, key_file: {key_file}")
+        logger.info(f"Initializing BigQuery client for project: {project}, location: {location}")
+        
+        # Get project from environment if not provided
         if not project:
-            raise ValueError("Project is required")
+            project = os.getenv('GOOGLE_CLOUD_PROJECT')
+            if not project:
+                raise ValueError("Project is required. Set via --project argument or GOOGLE_CLOUD_PROJECT environment variable")
+        
+        # Get location from environment if not provided  
         if not location:
-            raise ValueError("Location is required")
+            location = os.getenv('GOOGLE_CLOUD_LOCATION', 'US')
+        
+        # Get key file from environment if not provided
+        if not key_file:
+            key_file = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+        
+        logger.info(f"Using project: {project}, location: {location}, key_file: {key_file}")
         
         credentials: Optional[GoogleAuthCredentials] = None
         scopes = ["https://www.googleapis.com/auth/cloud-platform"]
@@ -72,18 +85,54 @@ class BigQueryDatabase:
                 credentials = creds_obj
                 logger.info(f"Successfully loaded Application Default Credentials. Effective project for quota: {detected_project_id or project}")
             except google.auth.exceptions.DefaultCredentialsError as e:
-                logger.warning(
-                    f"Could not automatically find Application Default Credentials: {e}. "
-                    "The BigQuery client will still attempt to find them. "
-                    "Ensure GOOGLE_APPLICATION_CREDENTIALS is set or you are in a GCP-configured environment."
+                logger.error(f"Could not find Application Default Credentials: {e}")
+                self._provide_auth_guidance()
+                raise ValueError(
+                    f"Authentication failed: {e}\n"
+                    "Please run 'gcloud auth application-default login' or set GOOGLE_APPLICATION_CREDENTIALS environment variable."
                 )
-                # credentials remains None, BigQuery client will try its own ADC lookup.
             except Exception as e: # Catch any other unexpected errors during google.auth.default()
                 logger.error(f"An unexpected error occurred while trying to load Application Default Credentials: {e}")
-                # credentials remains None, BigQuery client will try its own ADC lookup.
+                self._provide_auth_guidance()
+                raise ValueError(f"Authentication failed: {e}")
 
         self.client = bigquery.Client(credentials=credentials, project=project, location=location)
         self.datasets_filter = datasets_filter
+        
+        # Test the connection
+        try:
+            # Simple query to test authentication and permissions
+            list(self.client.list_datasets(max_results=1))
+            logger.info("BigQuery client initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to connect to BigQuery: {e}")
+            self._provide_auth_guidance()
+            raise ValueError(f"Failed to connect to BigQuery: {e}")
+
+    def _provide_auth_guidance(self):
+        """Provide helpful authentication guidance to users"""
+        logger.info("""
+        
+        Authentication Setup Guide:
+        ==========================
+        
+        For local development (RECOMMENDED):
+        1. Install gcloud CLI: https://cloud.google.com/sdk/docs/install
+        2. Run: gcloud auth application-default login
+        3. This will authenticate using your Google account
+        
+        Alternative methods:
+        1. Set GOOGLE_APPLICATION_CREDENTIALS environment variable to point to service account key
+        2. Use --key-file parameter to specify service account key file
+        3. Run on GCP compute resources (automatic authentication)
+        
+        For service account keys:
+        1. Create service account in Google Cloud Console
+        2. Grant BigQuery permissions (BigQuery Data Viewer, BigQuery Job User)
+        3. Download JSON key file
+        4. Set GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json
+        
+        """)
 
     def execute_query(self, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """Execute a SQL query and return results as a list of dictionaries"""
