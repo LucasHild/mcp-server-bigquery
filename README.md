@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/lucashild-mcp-server-bigquery-badge.png)](https://mseep.ai/app/lucashild-mcp-server-bigquery)
+
 # BigQuery MCP server
 
 [![smithery badge](https://smithery.ai/badge/mcp-server-bigquery)](https://smithery.ai/server/mcp-server-bigquery)
