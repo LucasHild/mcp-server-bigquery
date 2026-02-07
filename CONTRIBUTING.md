@@ -1,5 +1,17 @@
 # Contributing
 
+## Local Installation
+
+1. Install the server locally:
+
+```
+claude mcp add bigquery --scope user --transport stdio -- uv --directory {{PATH_TO_REPO}} run mcp-server-bigquery --project {PROJECT_ID} --location {{LOCATION}}
+```
+
+2. Start Claude Code: `claude`
+
+3. After every change, reconnect the MCP server: `/mcp`, `bigquery`, `Reconnect`
+
 ## Building and Publishing
 
 To prepare the package for distribution:
