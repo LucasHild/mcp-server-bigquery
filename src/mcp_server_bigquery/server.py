@@ -172,14 +172,17 @@ async def main(project: str, location: str, key_file: Optional[str], datasets_fi
                 results = db.describe_table(arguments["table_name"])
                 return [types.TextContent(type="text", text=str(results))]
 
-            if name == "execute-query":
+            elif name == "execute-query":
+                if not arguments or "query" not in arguments:
+                    raise ValueError("Missing query argument")
                 results = db.execute_query(arguments["query"])
                 return [types.TextContent(type="text", text=str(results))]
 
             else:
                 raise ValueError(f"Unknown tool: {name}")
         except Exception as e:
-            return [types.TextContent(type="text", text=f"Error: {str(e)}")]
+            logger.error(f"Error handling tool {name}: {e}")
+            raise Exception(str(e) or f"{type(e).__name__}: {repr(e)}") from e
 
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
         logger.info("Server running with stdio transport")
