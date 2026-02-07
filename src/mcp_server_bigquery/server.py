@@ -27,7 +27,7 @@ logger.setLevel(logging.DEBUG)
 logger.info("Starting MCP BigQuery Server")
 
 class BigQueryDatabase:
-    def __init__(self, project: str, location: str, key_file: Optional[str], datasets_filter: list[str]):
+    def __init__(self, project: str, location: str, key_file: Optional[str], datasets_filter: list[str], timeout: Optional[float] = None):
         """Initialize a BigQuery database client"""
         logger.info(f"Initializing BigQuery client for project: {project}, location: {location}, key_file: {key_file}")
         if not project:
@@ -49,6 +49,7 @@ class BigQueryDatabase:
 
         self.client = bigquery.Client(credentials=credentials, project=project, location=location)
         self.datasets_filter = datasets_filter
+        self.timeout = timeout
 
     def execute_query(self, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """Execute a SQL query and return results as a list of dictionaries"""
@@ -59,7 +60,7 @@ class BigQueryDatabase:
             else:
                 job = self.client.query(query)
                 
-            results = job.result()
+            results = job.result(timeout=self.timeout)
             rows = [dict(row.items()) for row in results]
             logger.debug(f"Query returned {len(rows)} rows")
             return rows
@@ -108,10 +109,10 @@ class BigQueryDatabase:
             bigquery.ScalarQueryParameter("table_name", "STRING", table_id),
         ])
 
-async def main(project: str, location: str, key_file: Optional[str], datasets_filter: list[str]):
+async def main(project: str, location: str, key_file: Optional[str], datasets_filter: list[str], timeout: Optional[float] = None):
     logger.info(f"Starting BigQuery MCP Server with project: {project} and location: {location}")
 
-    db = BigQueryDatabase(project, location, key_file, datasets_filter)
+    db = BigQueryDatabase(project, location, key_file, datasets_filter, timeout)
     server = Server("bigquery-manager")
 
     # Register handlers

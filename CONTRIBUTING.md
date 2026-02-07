@@ -1,5 +1,11 @@
 # Contributing
 
+## Local Installation
+
+```
+claude mcp add bigquery --scope user --transport stdio -- uv --directory {{PATH_TO_REPO}} run mcp-server-bigquery --project {PROJECT_ID} --location {{LOCATION}}
+```
+
 ## Building and Publishing
 
 To prepare the package for distribution:

@@ -11,7 +11,8 @@ def main():
     parser.add_argument('--location', help='BigQuery location', required=False)
     parser.add_argument('--key-file', help='BigQuery Service Account', required=False)
     parser.add_argument('--dataset', help='BigQuery dataset', required=False, action='append')
-    
+    parser.add_argument('--timeout', help='Query timeout in seconds', required=False, type=float)
+
     args = parser.parse_args()
 
     # Get values from environment variables if not provided as arguments
@@ -23,8 +24,11 @@ def main():
     if not datasets_filter and 'BIGQUERY_DATASETS' in os.environ:
         datasets_filter = os.environ.get('BIGQUERY_DATASETS', '').split(',')
         datasets_filter = [d.strip() for d in datasets_filter if d.strip()]
-    
-    asyncio.run(server.main(project, location, key_file, datasets_filter))
+
+    timeout_env = os.environ.get('BIGQUERY_TIMEOUT')
+    timeout = args.timeout or (float(timeout_env) if timeout_env else None)
+
+    asyncio.run(server.main(project, location, key_file, datasets_filter, timeout))
 
 # Optionally expose other important items at package level
 __all__ = ['main', 'server']
