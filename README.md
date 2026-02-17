@@ -1,5 +1,6 @@
 # BigQuery MCP server
 
+[![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/LucasHild/mcp-server-bigquery)](https://archestra.ai/mcp-catalog/lucashild__mcp-server-bigquery)
 [![smithery badge](https://smithery.ai/badge/mcp-server-bigquery)](https://smithery.ai/server/mcp-server-bigquery)
 
 A Model Context Protocol server that provides access to BigQuery. This server enables LLMs to inspect database schemas and execute queries.
