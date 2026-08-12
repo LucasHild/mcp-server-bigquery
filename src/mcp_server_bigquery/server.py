@@ -1,5 +1,5 @@
-from google.cloud import bigquery
-from google.oauth2 import service_account
+from __future__ import annotations
+import asyncio
 import logging
 from mcp.server.models import InitializationOptions
 import mcp.types as types
@@ -29,12 +29,22 @@ logger.info("Starting MCP BigQuery Server")
 class BigQueryDatabase:
     def __init__(self, project: str, location: str, key_file: Optional[str], datasets_filter: list[str], timeout: Optional[float] = None):
         """Initialize a BigQuery database client"""
+        # Deferred: `from google.cloud import bigquery` alone measures ~35s cold
+        # (grpcio/protobuf/proto-plus/google-api-core import chain). Importing it
+        # at module load time (the original code) blocks the process before the
+        # stdio loop even opens, racing the MCP client's connect timeout. Doing it
+        # here means it only pays that cost inside the to_thread() call on first
+        # tool use, after the handshake has already succeeded.
+        global bigquery, service_account
+        from google.cloud import bigquery
+        from google.oauth2 import service_account
+
         logger.info(f"Initializing BigQuery client for project: {project}, location: {location}, key_file: {key_file}")
         if not project:
             raise ValueError("Project is required")
         if not location:
             raise ValueError("Location is required")
-        
+
         credentials: service_account.Credentials | None = None
         if key_file:
             try:
@@ -59,7 +69,7 @@ class BigQueryDatabase:
                 job = self.client.query(query, job_config=bigquery.QueryJobConfig(query_parameters=params))
             else:
                 job = self.client.query(query)
-                
+
             results = job.result(timeout=self.timeout)
             rows = [dict(row.items()) for row in results]
             logger.debug(f"Query returned {len(rows)} rows")
@@ -67,7 +77,7 @@ class BigQueryDatabase:
         except Exception as e:
             logger.error(f"Database error executing query: {e}")
             raise
-    
+
     def list_tables(self) -> list[str]:
         """List all tables in the BigQuery database"""
         logger.debug("Listing all tables")
@@ -112,8 +122,25 @@ class BigQueryDatabase:
 async def main(project: str, location: str, key_file: Optional[str], datasets_filter: list[str], timeout: Optional[float] = None):
     logger.info(f"Starting BigQuery MCP Server with project: {project} and location: {location}")
 
-    db = BigQueryDatabase(project, location, key_file, datasets_filter, timeout)
     server = Server("bigquery-manager")
+
+    # Constructing BigQueryDatabase() imports/initializes the google-cloud-bigquery
+    # client, which is slow (cold import alone can exceed 30s) and was previously
+    # done synchronously before the stdio loop started, causing the MCP client's
+    # connect timeout to race a client that hadn't even started reading stdin yet.
+    # Defer construction to first tool call, off the event loop, so the stdio
+    # handshake completes immediately.
+    db_holder: dict[str, BigQueryDatabase] = {}
+    db_lock = asyncio.Lock()
+
+    async def get_db() -> BigQueryDatabase:
+        if "db" not in db_holder:
+            async with db_lock:
+                if "db" not in db_holder:
+                    db_holder["db"] = await asyncio.to_thread(
+                        BigQueryDatabase, project, location, key_file, datasets_filter, timeout
+                    )
+        return db_holder["db"]
 
     # Register handlers
     logger.debug("Registering handlers")
@@ -162,20 +189,22 @@ async def main(project: str, location: str, key_file: Optional[str], datasets_fi
         logger.debug(f"Handling tool execution request: {name}")
 
         try:
+            db = await get_db()
+
             if name == "list-tables":
-                results = db.list_tables()
+                results = await asyncio.to_thread(db.list_tables)
                 return [types.TextContent(type="text", text=str(results))]
 
             elif name == "describe-table":
                 if not arguments or "table_name" not in arguments:
                     raise ValueError("Missing table_name argument")
-                results = db.describe_table(arguments["table_name"])
+                results = await asyncio.to_thread(db.describe_table, arguments["table_name"])
                 return [types.TextContent(type="text", text=str(results))]
 
             elif name == "execute-query":
                 if not arguments or "query" not in arguments:
                     raise ValueError("Missing query argument")
-                results = db.execute_query(arguments["query"])
+                results = await asyncio.to_thread(db.execute_query, arguments["query"])
                 return [types.TextContent(type="text", text=str(results))]
 
             else:
