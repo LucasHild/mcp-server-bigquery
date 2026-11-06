@@ -1,5 +1,7 @@
 # BigQuery MCP server
 
+![BigQuery MCP Server](https://raw.githubusercontent.com/LucasHild/mcp-server-bigquery/main/assets/banner.png)
+
 A Model Context Protocol server that provides access to BigQuery. This server enables LLMs to inspect database schemas and execute queries.
 
 ## Components
