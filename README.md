@@ -1,14 +1,12 @@
 # BigQuery MCP server
 
-[![smithery badge](https://smithery.ai/badge/mcp-server-bigquery)](https://smithery.ai/server/mcp-server-bigquery)
-
 A Model Context Protocol server that provides access to BigQuery. This server enables LLMs to inspect database schemas and execute queries.
 
 ## Components
 
 ### Tools
 
-The server implements one tool:
+The server implements three tools:
 
 - `execute-query`: Executes a SQL query using BigQuery dialect
 - `list-tables`: Lists all tables in the BigQuery database
@@ -28,57 +26,14 @@ The server can be configured either with command line arguments or environment v
 
 ## Installation
 
-### Installing via Smithery
-
-To install BigQuery Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/mcp-server-bigquery):
-
-```bash
-npx -y @smithery/cli install mcp-server-bigquery --client claude
-```
-
 ### Claude Code
 
 ```bash
-claude mcp add bigquery --scope user --transport stdio -- uvx mcp-server-bigquery --project {PROJECT_ID} --location {{LOCATION}}
+claude mcp add bigquery --scope user -- uvx mcp-server-bigquery --project {{GCP_PROJECT_ID}} --location {{GCP_LOCATION}}
 ```
 
-### Claude Desktop
+### Codex
 
-On MacOS: `~/Library/Application\ Support/Claude/claude_desktop_config.json`  
-On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "bigquery": {
-      "command": "uvx",
-      "args": ["mcp-server-bigquery"],
-      "env": {
-        "BIGQUERY_PROJECT": "{{GCP_PROJECT_ID}}",
-        "BIGQUERY_LOCATION": "{{GCP_LOCATION}}"
-      }
-    }
-  }
-}
-```
-
-## Cursor
-
-1. Open Cursor Settings → MCP
-2. Click Add new global MCP server
-3. Add an entry for the BigQuery MCP, following the pattern below:
-
-```json
-{
-  "mcpServers": {
-    "bigquery": {
-      "command": "uvx",
-      "args": ["mcp-server-bigquery"],
-      "env": {
-        "BIGQUERY_PROJECT": "{{GCP_PROJECT_ID}}",
-        "BIGQUERY_LOCATION": "{{GCP_LOCATION}}"
-      }
-    }
-  }
-}
+```bash
+codex mcp add bigquery -- uvx mcp-server-bigquery --project {{GCP_PROJECT_ID}} --location {{GCP_LOCATION}}
 ```
