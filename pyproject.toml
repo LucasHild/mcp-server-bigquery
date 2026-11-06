@@ -5,8 +5,8 @@ description = "A Model Context Protocol server that provides access to BigQuery.
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
- "google-cloud-bigquery>=3.27.0",
- "mcp>=1.0.0",
+ "google-cloud-bigquery==3.47.0",
+ "mcp==2.3.0",
 ]
 [[project.authors]]
 name = "Lucas Hild"

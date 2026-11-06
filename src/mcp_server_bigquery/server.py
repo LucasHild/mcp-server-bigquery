@@ -1,9 +1,9 @@
 from google.cloud import bigquery
 from google.oauth2 import service_account
+import importlib.metadata
 import logging
-from mcp.server.models import InitializationOptions
 import mcp.types as types
-from mcp.server import NotificationOptions, Server
+from mcp.server import Server, ServerRequestContext
 import mcp.server.stdio
 from typing import Any, Optional
 
@@ -51,7 +51,7 @@ class BigQueryDatabase:
         self.datasets_filter = datasets_filter
         self.timeout = timeout
 
-    def execute_query(self, query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    def execute_query(self, query: str, params: list[bigquery.ScalarQueryParameter] | None = None) -> list[dict[str, Any]]:
         """Execute a SQL query and return results as a list of dictionaries"""
         logger.debug(f"Executing query: {query}")
         try:
@@ -109,92 +109,84 @@ class BigQueryDatabase:
             bigquery.ScalarQueryParameter("table_name", "STRING", table_id),
         ])
 
+TOOLS = [
+    types.Tool(
+        name="execute-query",
+        description="Execute a SELECT query on the BigQuery database",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "SELECT SQL query to execute using BigQuery dialect"},
+            },
+            "required": ["query"],
+        },
+    ),
+    types.Tool(
+        name="list-tables",
+        description="List all tables in the BigQuery database",
+        input_schema={
+            "type": "object",
+            "properties": {},
+        },
+    ),
+    types.Tool(
+        name="describe-table",
+        description="Get the schema information for a specific table",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "table_name": {"type": "string", "description": "Name of the table to describe (e.g. my_dataset.my_table)"},
+            },
+            "required": ["table_name"],
+        },
+    ),
+]
+
+
 async def main(project: str, location: str, key_file: Optional[str], datasets_filter: list[str], timeout: Optional[float] = None):
     logger.info(f"Starting BigQuery MCP Server with project: {project} and location: {location}")
 
     db = BigQueryDatabase(project, location, key_file, datasets_filter, timeout)
-    server = Server("bigquery-manager")
 
-    # Register handlers
-    logger.debug("Registering handlers")
+    async def handle_list_tools(
+        ctx: ServerRequestContext, params: types.PaginatedRequestParams | None
+    ) -> types.ListToolsResult:
+        return types.ListToolsResult(tools=TOOLS)
 
-    @server.list_tools()
-    async def handle_list_tools() -> list[types.Tool]:
-        """List available tools"""
-        return [
-            types.Tool(
-                name="execute-query",
-                description="Execute a SELECT query on the BigQuery database",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "SELECT SQL query to execute using BigQuery dialect"},
-                    },
-                    "required": ["query"],
-                },
-            ),
-            types.Tool(
-                name="list-tables",
-                description="List all tables in the BigQuery database",
-                inputSchema={
-                    "type": "object",
-                    "properties": {},
-                },
-            ),
-            types.Tool(
-                name="describe-table",
-                description="Get the schema information for a specific table",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "table_name": {"type": "string", "description": "Name of the table to describe (e.g. my_dataset.my_table)"},
-                    },
-                    "required": ["table_name"],
-                },
-            ),
-        ]
-
-    @server.call_tool()
     async def handle_call_tool(
-        name: str, arguments: dict[str, Any] | None
-    ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-        """Handle tool execution requests"""
+        ctx: ServerRequestContext, params: types.CallToolRequestParams
+    ) -> types.CallToolResult:
+        name = params.name
+        arguments = params.arguments or {}
         logger.debug(f"Handling tool execution request: {name}")
 
         try:
             if name == "list-tables":
                 results = db.list_tables()
-                return [types.TextContent(type="text", text=str(results))]
-
             elif name == "describe-table":
-                if not arguments or "table_name" not in arguments:
+                if "table_name" not in arguments:
                     raise ValueError("Missing table_name argument")
                 results = db.describe_table(arguments["table_name"])
-                return [types.TextContent(type="text", text=str(results))]
-
             elif name == "execute-query":
-                if not arguments or "query" not in arguments:
+                if "query" not in arguments:
                     raise ValueError("Missing query argument")
                 results = db.execute_query(arguments["query"])
-                return [types.TextContent(type="text", text=str(results))]
-
             else:
                 raise ValueError(f"Unknown tool: {name}")
         except Exception as e:
             logger.error(f"Error handling tool {name}: {e}")
-            raise Exception(str(e) or f"{type(e).__name__}: {repr(e)}") from e
+            message = str(e) or f"{type(e).__name__}: {repr(e)}"
+            return types.CallToolResult(content=[types.TextContent(type="text", text=message)], is_error=True)
+
+        return types.CallToolResult(content=[types.TextContent(type="text", text=str(results))])
+
+    server = Server(
+        "bigquery",
+        version=importlib.metadata.version("mcp-server-bigquery"),
+        on_list_tools=handle_list_tools,
+        on_call_tool=handle_call_tool,
+    )
 
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
         logger.info("Server running with stdio transport")
-        await server.run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name="bigquery",
-                server_version="0.3.0",
-                capabilities=server.get_capabilities(
-                    notification_options=NotificationOptions(),
-                    experimental_capabilities={},
-                ),
-            ),
-        )
+        await server.run(read_stream, write_stream, server.create_initialization_options())
